@@ -15,7 +15,9 @@ import TreeItem from "@mui/lab/TreeItem";
 import TopBar from "./components/TopBar";
 
 import "./App.css";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
+import { API_URL } from "./Constants";
 
 const darkTheme = createTheme({
   palette: {
@@ -50,31 +52,75 @@ function renderTree(data, onClick) {
   });
 }
 
-function App() {
-  const DATA = {
-    "AE-AQ": {
-      "AE-AQ-VN00": {
-        Data: "D1",
-      },
-      "AE-AQ-VN01": {
-        Data: "D2",
-      },
-      "AE-AQ-VN02": {
-        Data: "D2",
-      },
-    },
-    "AE-OC": {
-      "AE-OC-VN00": {
-        Data: "D3",
-      },
-      "AE-OC-VN01": {
-        Data: "D4",
-      },
-      "AE-OC-VN02": {
-        Data: "D5",
-      },
+const recursiveFetchData = async (url, data, parent) => {
+  let config = {
+    method: "get",
+    maxBodyLength: Infinity,
+    url: url + "?rcn=4",
+    headers: {
+      Accept: "application/json",
+      "X-M2M-RI": "12345",
+      "X-M2M-Origin": "S{{aei}}",
     },
   };
+
+  try {
+    let response = await axios.request(config);
+    for (let key in response.data["m2m:rsp"]) {
+      let arr = response.data["m2m:rsp"][key];
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i]["pi"] === parent) {
+          if (arr[i]["con"]) {
+            data[arr[i]["rn"]] = arr[i]["con"];
+          } else {
+            data[arr[i]["rn"]] = {};
+            recursiveFetchData(
+              url + "/" + arr[i]["rn"],
+              data[arr[i]["rn"]],
+              arr[i]["ri"]
+            );
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+const fetchData = async (setData) => {
+  let data = {};
+
+  let config = {
+    method: "get",
+    maxBodyLength: Infinity,
+    url: API_URL,
+    headers: {
+      Accept: "application/json",
+      "X-M2M-RI": "12345",
+      "X-M2M-Origin": "S{{aei}}",
+    },
+  };
+
+  try {
+    let response = await axios.request(config);
+    console.log(response.data);
+    let rn = response.data["m2m:cb"]["rn"];
+    data[rn] = {};
+    recursiveFetchData(API_URL, data[rn], response.data["m2m:cb"]["ri"]);
+    console.log(data);
+    setData(data);
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+function App() {
+  const [DATA, setDATA] = useState({});
+
+  useEffect(() => {
+    fetchData(setDATA);
+  }, []);
 
   const [darkMode, setDarkMode] = useState(false);
   const [data, setData] = useState("");
